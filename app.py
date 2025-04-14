@@ -29,16 +29,18 @@ if uploaded_file:
             # Ambil baris part
             lines = text.split("\n")
             for line in lines:
-                match = re.match(r"^([0-9\-]+)\s+(\d+)([A-Z \-/0-9]+)$", line.strip())
+                line = line.strip()
+                # Match pola: PARTNUMBER QTYDESCRIPTION REMARKS
+                match = re.match(r"^([0-9\-]+)\s+(\d+)([A-Z ]+)([A-Z0-9/\\-]+)$", line)
                 if match:
                     part_number = match.group(1)
                     qty = match.group(2)
-                    desc_and_remarks = match.group(3).strip()
-                    # Misah description dan remarks
-                    tokens = desc_and_remarks.split()
-                    description = tokens[0]
-                    remarks = " ".join(tokens[1:]) if len(tokens) > 1 else ""
-                    data.append([no, part_number, description, qty, kit_barcode, do_number, remarks])
+                    description = match.group(3).strip()
+                    remarks = match.group(4).strip()
+
+                    data.append([
+                        no, part_number, description, qty, kit_barcode, do_number, remarks
+                    ])
                     no += 1
 
     if data:
@@ -50,7 +52,7 @@ if uploaded_file:
         st.markdown("### 📋 Tabel Siap Copy")
         st.text_area("Tabel teks:", df.to_csv(sep="\t", index=False), height=300)
 
-        # Download tombol
+        # Download button
         towrite = io.BytesIO()
         df.to_excel(towrite, index=False, sheet_name="Kitting")
         towrite.seek(0)

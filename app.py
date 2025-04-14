@@ -16,6 +16,7 @@ if uploaded_file:
 
         for page in pdf.pages:
             text = page.extract_text()
+            st.text_area("Isi Halaman Mentah:", text, height=400)
             if not text:
                 continue
 

@@ -19,45 +19,41 @@ if uploaded_file:
             if not text:
                 continue
 
-            st.text_area("📄 Isi Halaman Mentah", text, height=300)
+            # Cek isi mentah untuk debugging
+            st.text_area("Isi Halaman Mentah:", text, height=300)
+
+            # Cari KIT BARCODE dan DO NUMBER
+            kit_barcode_match = re.search(r"KIT Barcode:\s*(\d+)", text)
+            do_number_match = re.search(r"parent product Code\n(.+?/F\d+)", text)
+
+            kit_barcode = kit_barcode_match.group(1) if kit_barcode_match else ""
+            do_number = do_number_match.group(1).split("/")[-1] if do_number_match else ""
 
             lines = text.split("\n")
-            kit_barcode = ""
-            do_number = ""
-
-            # Temukan KIT BARCODE dan DO NUMBER
-            for i, line in enumerate(lines):
-                if "KIT Barcode" in line:
-                    kit_barcode = line.split(":")[-1].strip()
-                if "parent product Code" in line and i + 1 < len(lines):
-                    do_line = lines[i + 1]
-                    if "/" in do_line:
-                        do_number = do_line.split("/")[-1].strip()
-
-            # Ambil baris part number valid saja
             for line in lines:
-                line = line.strip()
-                if re.match(r"^\d{5}-\d{5,}", line):  # part number format 04064-05520 dst
-                    parts = line.split()
-                    if len(parts) >= 4:
-                        part_number = parts[0]
-                        qty = parts[-2]
-                        remarks = parts[-1]
-                        description = " ".join(parts[1:-2])
+                # Cek baris seperti: PARTNUMBER DESCRIPTION QTY REMARKS
+                match = re.match(r"^([0-9\-]+)\s+([A-Z \-]+?)\s+(\d+)\s+([A-Z0-9/\-]+)$", line.strip())
+                if match:
+                    part_number = match.group(1)
+                    description = match.group(2).strip()
+                    qty = match.group(3)
+                    remarks = match.group(4)
 
-                        data.append([
-                            no, part_number, description, qty, kit_barcode, do_number, remarks
-                        ])
-                        no += 1
+                    data.append([
+                        no, part_number, description, qty, kit_barcode, do_number, remarks
+                    ])
+                    no += 1
 
     if data:
         df = pd.DataFrame(data, columns=["NO", "PART NUMBER", "DESCRIPTION", "@", "KIT BARCODE", "DO NUMBER", "REMARKS"])
-        st.success("✅ Data berhasil diekstrak dan diformat rapi!")
+        st.success("✅ Data berhasil diambil dari PDF")
         st.dataframe(df, use_container_width=True)
 
-        st.markdown("### 📋 Tabel Siap Copy")
-        st.text_area("Teks tabel:", df.to_csv(sep="\t", index=False), height=300)
+        # Tabel teks siap copy
+        st.markdown("### 📋 Tabel Teks")
+        st.text_area("Copy-paste:", df.to_csv(sep="\t", index=False), height=300)
 
+        # Download Excel
         towrite = io.BytesIO()
         df.to_excel(towrite, index=False, sheet_name="Kitting")
         towrite.seek(0)

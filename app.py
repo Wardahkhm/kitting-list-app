@@ -16,9 +16,11 @@ if uploaded_file:
 
         for page in pdf.pages:
             text = page.extract_text()
-            st.text_area("Isi Halaman Mentah:", text, height=400)
             if not text:
                 continue
+
+            # Cek isi mentah untuk debugging
+            st.text_area("Isi Halaman Mentah:", text, height=300)
 
             # Cari KIT BARCODE dan DO NUMBER
             kit_barcode_match = re.search(r"KIT Barcode:\s*(\d+)", text)
@@ -27,17 +29,15 @@ if uploaded_file:
             kit_barcode = kit_barcode_match.group(1) if kit_barcode_match else ""
             do_number = do_number_match.group(1).split("/")[-1] if do_number_match else ""
 
-            # Ambil baris part
             lines = text.split("\n")
             for line in lines:
-                line = line.strip()
-                # Match pola: PARTNUMBER QTYDESCRIPTION REMARKS
-                match = re.match(r"^([0-9\-]+)\s+(\d+)([A-Z ]+)([A-Z0-9/\\-]+)$", line)
+                # Cek baris seperti: PARTNUMBER DESCRIPTION QTY REMARKS
+                match = re.match(r"^([0-9\-]+)\s+([A-Z \-]+?)\s+(\d+)\s+([A-Z0-9/\-]+)$", line.strip())
                 if match:
                     part_number = match.group(1)
-                    qty = match.group(2)
-                    description = match.group(3).strip()
-                    remarks = match.group(4).strip()
+                    description = match.group(2).strip()
+                    qty = match.group(3)
+                    remarks = match.group(4)
 
                     data.append([
                         no, part_number, description, qty, kit_barcode, do_number, remarks
@@ -49,11 +49,11 @@ if uploaded_file:
         st.success("✅ Data berhasil diambil dari PDF")
         st.dataframe(df, use_container_width=True)
 
-        # Text area buat copy
-        st.markdown("### 📋 Tabel Siap Copy")
-        st.text_area("Tabel teks:", df.to_csv(sep="\t", index=False), height=300)
+        # Tabel teks siap copy
+        st.markdown("### 📋 Tabel Teks")
+        st.text_area("Copy-paste:", df.to_csv(sep="\t", index=False), height=300)
 
-        # Download button
+        # Download Excel
         towrite = io.BytesIO()
         df.to_excel(towrite, index=False, sheet_name="Kitting")
         towrite.seek(0)

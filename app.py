@@ -2,45 +2,58 @@ import streamlit as st
 import pdfplumber
 import pandas as pd
 import io
+import re
 
-st.title("Kitting List PDF Extractor")
-st.write("Upload PDF Kitting List")
+st.set_page_config(page_title="Kitting PDF Extractor", layout="wide")
+st.title("📦 Kitting List PDF Extractor")
 
-uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
-page_number = st.number_input("Halaman yang ingin diambil", min_value=1, step=1)
+uploaded_file = st.file_uploader("Upload file PDF kitting list", type=["pdf"])
 
-if uploaded_file and page_number:
+if uploaded_file:
     with pdfplumber.open(uploaded_file) as pdf:
-        if page_number <= len(pdf.pages):
-            page = pdf.pages[page_number - 1]  # pdfplumber uses 0-indexed pages
+        data = []
+        no = 1
+
+        for page in pdf.pages:
             text = page.extract_text()
+            if not text:
+                continue
 
-            if text:
-                lines = text.split("\n")
-                data_rows = []
+            # Cari KIT BARCODE dan DO NUMBER
+            kit_barcode_match = re.search(r"KIT Barcode:\s*(\d+)", text)
+            do_number_match = re.search(r"parent product Code\n(.+?/F\d+)", text)
 
-                for line in lines:
-                    if any(char.isdigit() for char in line[:3]):  # Misalnya baris yang diawali angka adalah data
-                        parts = line.split()
-                        if len(parts) >= 7:
-                            no = parts[0]
-                            part_number = parts[1]
-                            description = " ".join(parts[2:-4])
-                            qty = parts[-4]
-                            kit_barcode = parts[-3]
-                            do_number = parts[-2]
-                            remarks = parts[-1]
-                            data_rows.append([no, part_number, description, qty, kit_barcode, do_number, remarks])
+            kit_barcode = kit_barcode_match.group(1) if kit_barcode_match else ""
+            do_number = do_number_match.group(1).split("/")[-1] if do_number_match else ""
 
-                df = pd.DataFrame(data_rows, columns=["NO", "PART NUMBER", "DESCRIPTION", "@", "KIT BARCODE", "DO NUMBER", "REMARKS"])
-                st.dataframe(df)
+            # Ambil baris part
+            lines = text.split("\n")
+            for line in lines:
+                match = re.match(r"^([0-9\-]+)\s+(\d+)([A-Z \-/0-9]+)$", line.strip())
+                if match:
+                    part_number = match.group(1)
+                    qty = match.group(2)
+                    desc_and_remarks = match.group(3).strip()
+                    # Misah description dan remarks
+                    tokens = desc_and_remarks.split()
+                    description = tokens[0]
+                    remarks = " ".join(tokens[1:]) if len(tokens) > 1 else ""
+                    data.append([no, part_number, description, qty, kit_barcode, do_number, remarks])
+                    no += 1
 
-                # Download button
-                towrite = io.BytesIO()
-                df.to_excel(towrite, index=False, sheet_name='Kitting List')
-                towrite.seek(0)
-                st.download_button("Download Excel", towrite, file_name="kitting_list.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            else:
-                st.warning("Teks tidak ditemukan di halaman tersebut.")
-        else:
-            st.error("Halaman tidak ada di file PDF.")
+    if data:
+        df = pd.DataFrame(data, columns=["NO", "PART NUMBER", "DESCRIPTION", "@", "KIT BARCODE", "DO NUMBER", "REMARKS"])
+        st.success("✅ Data berhasil diambil dari PDF")
+        st.dataframe(df, use_container_width=True)
+
+        # Text area buat copy
+        st.markdown("### 📋 Tabel Siap Copy")
+        st.text_area("Tabel teks:", df.to_csv(sep="\t", index=False), height=300)
+
+        # Download tombol
+        towrite = io.BytesIO()
+        df.to_excel(towrite, index=False, sheet_name="Kitting")
+        towrite.seek(0)
+        st.download_button("⬇️ Download Excel", towrite, file_name="kitting_list.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    else:
+        st.warning("⚠️ Tidak ditemukan data part number yang cocok.")
